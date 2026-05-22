@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% set active_tab = 'alarms' %}
+{% block title %}Alarms{% endblock %}
+{% block body %}
+<div class="mb-4 flex items-center justify-between">
+  <h1 class="text-xl font-semibold">Alarms</h1>
+  <a href="{{ url_for('alarm_new') }}" class="rounded-xl bg-indigo-500 px-4 py-2 font-medium text-white hover:bg-indigo-400 transition">+ New</a>
+</div>
+
+{% if not alarms %}
+  <div class="rounded-2xl border border-edge bg-panel p-10 text-center text-slate-500">
+    No alarms yet. <a href="{{ url_for('alarm_new') }}" class="text-indigo-400">Create one →</a>
+  </div>
+{% endif %}
+
+<div class="space-y-3">
+{% for a in alarms %}
+  <div class="rounded-2xl border border-edge bg-panel p-4" data-id="{{ a.id }}">
+    <div class="flex items-center gap-4">
+      <div class="font-mono text-3xl font-bold tabular-nums {{ 'text-slate-200' if a.enabled else 'text-slate-600 line-through' }}">{{ a.time }}</div>
+      <div class="min-w-0 flex-1">
+        <div class="truncate font-medium">{{ a.label }}</div>
+        <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+          <span class="rounded-md bg-slate-700/50 px-2 py-0.5 text-slate-300">{{ a.days_of_week|fmtdays }}</span>
+          {% if a.snoozable %}<span class="rounded-md bg-sky-500/15 px-2 py-0.5 text-sky-300">snooze</span>{% endif %}
+          {% if a.irritable %}<span class="rounded-md bg-amber-500/15 px-2 py-0.5 text-amber-300">irritable</span>{% endif %}
+          {% if a.skip_dates %}<span class="rounded-md bg-slate-700/50 px-2 py-0.5 text-slate-400">{{ a.skip_dates|length }} skip</span>{% endif %}
+        </div>
+      </div>
+      <button onclick="toggle('{{ a.id }}', {{ 'false' if a.enabled else 'true' }})"
+        class="relative h-6 w-11 shrink-0 rounded-full transition {{ 'bg-indigo-500' if a.enabled else 'bg-slate-600' }}">
+        <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all {{ 'left-[22px]' if a.enabled else 'left-0.5' }}"></span>
+      </button>
+    </div>
+    <div class="mt-3 flex gap-2 text-sm">
+      <a href="{{ url_for('alarm_edit', aid=a.id) }}" class="rounded-lg border border-edge px-3 py-1.5 text-slate-300 hover:bg-slate-700/30">Edit</a>
+      <button onclick="post('/api/alarms/{{ a.id }}/test')" class="rounded-lg border border-edge px-3 py-1.5 text-slate-300 hover:bg-slate-700/30">Test</button>
+      <button onclick="post('/api/alarms/{{ a.id }}/skip')" class="rounded-lg border border-edge px-3 py-1.5 text-slate-300 hover:bg-slate-700/30">Skip today</button>
+      <button onclick="del('{{ a.id }}')" class="ml-auto rounded-lg border border-rose-500/30 px-3 py-1.5 text-rose-300 hover:bg-rose-500/10">Delete</button>
+    </div>
+  </div>
+{% endfor %}
+</div>
+
+<script>
+async function post(p, body){ await fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}); }
+async function toggle(id, on){ await post('/api/alarms/'+id+(on?'/enable':'/disable')); location.reload(); }
+async function del(id){ if(confirm('Delete this alarm?')){ await fetch('/api/alarms/'+id,{method:'DELETE'}); location.reload(); } }
+</script>
+{% endblock %}

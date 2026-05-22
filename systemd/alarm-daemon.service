@@ -1,0 +1,33 @@
+# Alarm Clock Daemon systemd user service
+#
+# Installation:
+#   mkdir -p ~/.config/systemd/user
+#   cp alarm-daemon.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable alarm-daemon
+#   systemctl --user start alarm-daemon
+#
+# Check status:
+#   systemctl --user status alarm-daemon
+#   journalctl --user -u alarm-daemon -f
+
+[Unit]
+Description=Alarm Clock Daemon
+Documentation=file:///home/klein/codeWS/Python/Alarm/README.md
+After=graphical-session.target sound.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/klein/codeWS/Python/Alarm
+Environment=DISPLAY=:0
+Environment=ALARM_PROJECT_ROOT=/home/klein/codeWS/Python/Alarm
+ExecStart=/home/klein/codeWS/Python/Alarm/.venv/bin/python -m alarm serve
+Restart=on-failure
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

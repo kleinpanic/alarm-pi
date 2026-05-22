@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% set active_tab = 'home' %}
+{% block title %}Dashboard{% endblock %}
+{% block body %}
+<!-- Ringing banner (hidden unless an alarm is active) -->
+<div id="ringing" class="hidden mb-6 rounded-2xl border border-rose-500/40 bg-rose-500/10 p-6 text-center">
+  <div class="text-xs uppercase tracking-widest text-rose-300/80">Ringing now</div>
+  <div id="ringing-label" class="mt-1 text-3xl font-bold text-rose-200">—</div>
+  <div id="ringing-time" class="text-rose-300/70"></div>
+  <div class="mt-5 flex justify-center gap-3">
+    <button onclick="act('/api/ringing/dismiss')"
+      class="rounded-xl bg-rose-500 px-6 py-3 font-semibold text-white shadow-lg shadow-rose-500/30 hover:bg-rose-400 active:scale-95 transition">Dismiss</button>
+    <button id="snooze-btn" onclick="act('/api/ringing/snooze')"
+      class="rounded-xl bg-sky-500 px-6 py-3 font-semibold text-white shadow-lg shadow-sky-500/30 hover:bg-sky-400 active:scale-95 transition">Snooze</button>
+  </div>
+</div>
+
+<div class="grid grid-cols-2 gap-4">
+  <div class="rounded-2xl border border-edge bg-panel p-5">
+    <div class="text-xs uppercase tracking-widest text-slate-500">Now</div>
+    <div id="clock" class="mt-1 font-mono text-4xl font-bold tabular-nums">{{ status.now }}</div>
+  </div>
+  <div class="rounded-2xl border border-edge bg-panel p-5">
+    <div class="text-xs uppercase tracking-widest text-slate-500">Next alarm</div>
+    {% if status.next %}
+      <div class="mt-1 text-2xl font-bold text-indigo-300">{{ status.next.time }}</div>
+      <div class="truncate text-sm text-slate-400">{{ status.next.label }} · {{ status.next.when_human }}</div>
+    {% else %}
+      <div class="mt-1 text-2xl font-bold text-slate-600">none</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="mt-4 flex items-center justify-between rounded-2xl border border-edge bg-panel p-5">
+  <div>
+    <div class="text-2xl font-bold">{{ status.enabled_count }}<span class="text-slate-500">/{{ status.alarm_count }}</span></div>
+    <div class="text-sm text-slate-500">alarms enabled</div>
+  </div>
+  <a href="{{ url_for('alarm_new') }}" class="rounded-xl bg-indigo-500 px-4 py-2.5 font-medium text-white hover:bg-indigo-400 transition">+ New alarm</a>
+</div>
+
+<script>
+async function act(path){ await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); refresh(); }
+async function refresh(){
+  try {
+    const s = await (await fetch('/api/status')).json();
+    document.getElementById('clock').textContent = s.now;
+    const box = document.getElementById('ringing');
+    if (s.ringing){
+      box.classList.remove('hidden');
+      document.getElementById('ringing-label').textContent = s.ringing.label;
+      document.getElementById('ringing-time').textContent = 'scheduled ' + s.ringing.time;
+      document.getElementById('snooze-btn').style.display = s.ringing.snoozable ? '' : 'none';
+    } else { box.classList.add('hidden'); }
+  } catch(e){}
+}
+setInterval(refresh, 2000); refresh();
+</script>
+{% endblock %}

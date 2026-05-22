@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% set active_tab = 'settings' %}
+{% block title %}Settings{% endblock %}
+{% block body %}
+<h1 class="mb-4 text-xl font-semibold">Settings</h1>
+<form method="post" class="space-y-5 rounded-2xl border border-edge bg-panel p-5">
+  <div class="grid grid-cols-2 gap-4">
+    <div>
+      <label class="mb-1 block text-sm text-slate-400">Default snooze (min)</label>
+      <input type="number" name="snooze" min="1" value="{{ s.default_snooze_minutes }}"
+        class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+    </div>
+    <div>
+      <label class="mb-1 block text-sm text-slate-400">Web port</label>
+      <input type="number" name="port" value="{{ s.web_port }}"
+        class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+      <p class="mt-1 text-xs text-slate-600">Changing this needs a daemon restart.</p>
+    </div>
+  </div>
+  <div>
+    <label class="mb-1 block text-sm text-slate-400">LAN PIN <span class="text-slate-600">(blank = open on LAN; localhost always allowed)</span></label>
+    <input name="pin" value="{{ s.web_pin or '' }}" placeholder="(none)"
+      class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 font-mono outline-none focus:border-indigo-500">
+  </div>
+  <div>
+    <label class="mb-1 block text-sm text-slate-400">Default sound</label>
+    <input name="sound" value="{{ s.default_sound }}"
+      class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 font-mono text-sm outline-none focus:border-indigo-500">
+  </div>
+  <div class="flex items-center gap-3 border-t border-edge pt-4 text-sm text-slate-500">
+    <span>Audio player: <span class="font-mono text-slate-300">{{ s.audio_player }}</span></span>
+    <span>·</span>
+    <span>Max volume: <span class="text-slate-300">{{ s.max_volume }}%</span></span>
+  </div>
+  <button type="submit" class="rounded-xl bg-indigo-500 px-5 py-2.5 font-semibold text-white hover:bg-indigo-400 transition">Save</button>
+</form>
+{% endblock %}

@@ -1,0 +1,12 @@
+{
+  "audio_player": "mpv",
+  "audio_player_args": ["--no-video", "--loop=inf"],
+  "default_sound": "sounds/new-alarm-tone.mp3",
+  "default_snooze_minutes": 5,
+  "check_interval_seconds": 5,
+  "max_volume": 100,
+  "web_enabled": true,
+  "web_host": "0.0.0.0",
+  "web_port": 8765,
+  "web_pin": null
+}

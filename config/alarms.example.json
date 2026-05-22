@@ -1,0 +1,16 @@
+[
+  {
+    "id": "1",
+    "label": "Wake up",
+    "time": "07:00",
+    "days_of_week": [0, 1, 2, 3, 4],
+    "enabled": false,
+    "snoozable": true,
+    "irritable": false,
+    "sound_path": null,
+    "base_volume": 70,
+    "irritable_duration_minutes": 5,
+    "irritable_volume_step": 10,
+    "skip_dates": []
+  }
+]

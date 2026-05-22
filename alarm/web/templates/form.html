@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% set active_tab = 'alarms' %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<div class="mb-4 flex items-center gap-3">
+  <a href="{{ url_for('alarms_page') }}" class="text-slate-500 hover:text-slate-300">←</a>
+  <h1 class="text-xl font-semibold">{{ title }}</h1>
+</div>
+
+{% if error %}
+  <div class="mb-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{{ error }}</div>
+{% endif %}
+
+{% set day_names = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+<form method="post" class="space-y-5 rounded-2xl border border-edge bg-panel p-5">
+  <div>
+    <label class="mb-1 block text-sm text-slate-400">Label</label>
+    <input name="label" value="{{ alarm.label if alarm else '' }}" placeholder="Wake up" required
+      class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+  </div>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div>
+      <label class="mb-1 block text-sm text-slate-400">Time</label>
+      <input type="time" name="time" value="{{ alarm.time if alarm else '07:00' }}" required
+        class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 font-mono outline-none focus:border-indigo-500">
+    </div>
+    <div>
+      <label class="mb-1 block text-sm text-slate-400">Base volume</label>
+      <input type="number" name="volume" min="0" max="100" value="{{ alarm.base_volume if alarm else 70 }}"
+        class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+    </div>
+  </div>
+
+  <div>
+    <label class="mb-2 block text-sm text-slate-400">Days</label>
+    <div class="flex flex-wrap gap-2">
+      {% for d in range(7) %}
+      <label class="cursor-pointer">
+        <input type="checkbox" name="days" value="{{ d }}" class="peer sr-only" {{ 'checked' if d in selected_days else '' }}>
+        <span class="block rounded-xl border border-edge px-3.5 py-2 text-sm peer-checked:border-indigo-500 peer-checked:bg-indigo-500/20 peer-checked:text-indigo-200">{{ day_names[d] }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="flex flex-wrap gap-5 pt-1">
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" name="snoozable" class="h-4 w-4 accent-indigo-500" {{ 'checked' if (alarm.snoozable if alarm else true) else '' }}> Snoozable
+    </label>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" name="irritable" class="h-4 w-4 accent-amber-500" {{ 'checked' if (alarm.irritable if alarm else false) else '' }}> Irritable mode
+    </label>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" name="enabled" class="h-4 w-4 accent-indigo-500" {{ 'checked' if (alarm.enabled if alarm else true) else '' }}> Enabled
+    </label>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div>
+      <label class="mb-1 block text-sm text-slate-400">Irritable duration (min)</label>
+      <input type="number" name="irritable_duration" min="0" value="{{ alarm.irritable_duration_minutes if alarm else 5 }}"
+        class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+    </div>
+    <div>
+      <label class="mb-1 block text-sm text-slate-400">Volume step (%/min)</label>
+      <input type="number" name="irritable_step" min="0" value="{{ alarm.irritable_volume_step if alarm else 10 }}"
+        class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+    </div>
+  </div>
+
+  <div>
+    <label class="mb-1 block text-sm text-slate-400">Sound path <span class="text-slate-600">(blank = default)</span></label>
+    <input name="sound" value="{{ alarm.sound_path or '' if alarm else '' }}" placeholder="/path/to/sound.mp3"
+      class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 font-mono text-sm outline-none focus:border-indigo-500">
+  </div>
+
+  <div class="flex gap-3 pt-1">
+    <button type="submit" class="rounded-xl bg-indigo-500 px-5 py-2.5 font-semibold text-white hover:bg-indigo-400 transition">Save</button>
+    <a href="{{ url_for('alarms_page') }}" class="rounded-xl border border-edge px-5 py-2.5 text-slate-300 hover:bg-slate-700/30">Cancel</a>
+  </div>
+</form>
+{% endblock %}

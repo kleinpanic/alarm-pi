@@ -1,0 +1,12 @@
+# gitleaks config — used by the pre-commit hook and CI.
+# Extends the built-in ruleset; example configs hold no secrets.
+title = "AlarmPi gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-secret example/config artifacts"
+paths = [
+  '''config/.*\.example\.json''',
+]

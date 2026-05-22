@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alarm-pi"
+version = "1.0.0"
+description = "Headless alarm clock for Raspberry Pi with a CLI and a LAN web UI"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Klein Panic" }]
+keywords = ["alarm", "raspberry-pi", "cli", "flask", "systemd"]
+dependencies = ["flask>=3.0"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pre-commit"]
+
+[project.urls]
+Homepage = "https://github.com/kleinpanic/alarm-pi"
+Repository = "https://github.com/kleinpanic/alarm-pi"
+Issues = "https://github.com/kleinpanic/alarm-pi/issues"
+
+[project.scripts]
+alarm = "alarm.cli:main"
+
+[tool.setuptools]
+packages = ["alarm", "alarm.web"]
+
+[tool.setuptools.package-data]
+"alarm.web" = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
