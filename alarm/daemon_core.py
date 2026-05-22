@@ -53,7 +53,10 @@ class AlarmDaemon:
         logger.info("Alarm daemon starting")
         logger.info(f"Config directory: {ALARMS_FILE.parent}")
         logger.info(f"Loaded {len(self.alarms)} alarm(s)")
-        self._start_web()
+        if self.settings.web_enabled:
+            self._start_web()
+        else:
+            logger.info("Web UI disabled (web_enabled=false)")
         self._running = True
 
         while self._running:
@@ -88,20 +91,43 @@ class AlarmDaemon:
             self.audio.settings = new_settings
             self._config_mtime = current
             logger.info(f"Reloaded {len(self.alarms)} alarm(s)")
+            # React to a runtime web_enabled change.
+            web_alive = self._web_thread is not None and self._web_thread.is_alive()
+            if self.settings.web_enabled and not web_alive:
+                logger.info("web_enabled turned on; starting web server")
+                self._start_web()
+            elif not self.settings.web_enabled and web_alive:
+                logger.warning("web_enabled turned off; web server runs until daemon restart")
 
     def _start_web(self) -> None:
+        """Launch the web server in an isolated daemon thread.
+
+        Gated by ``settings.web_enabled`` (default True), evaluated at runtime so
+        a config change can bring it up. Idempotent: a no-op if already running.
+        Any web failure is contained in the thread and never affects the
+        alarm scheduler loop.
+        """
         if not self.settings.web_enabled:
-            logger.info("Web UI disabled in settings")
             return
+        if self._web_thread is not None and self._web_thread.is_alive():
+            return
+        self._web_thread = threading.Thread(
+            target=self._web_thread_main, daemon=True, name="alarm-web"
+        )
+        self._web_thread.start()
+
+    def _web_thread_main(self) -> None:
+        """Thread entrypoint that fully isolates web failures from the daemon."""
         try:
             from .web.server import run_server
         except Exception as e:
             logger.error(f"Web server unavailable ({e}); running headless")
             return
-        self._web_thread = threading.Thread(
-            target=run_server, args=(self,), daemon=True, name="alarm-web"
-        )
-        self._web_thread.start()
+        try:
+            logger.info(f"Web UI on http://{self.settings.web_host}:{self.settings.web_port}")
+            run_server(self)
+        except Exception as e:
+            logger.error(f"Web server stopped ({e}); alarm core unaffected", exc_info=True)
         logger.info(f"Web UI on http://{self.settings.web_host}:{self.settings.web_port}")
 
     # ---- ringing / control ----

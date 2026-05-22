@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed
+- Web server startup hardened: runs in a failure-isolated daemon thread (a web
+  crash can no longer affect the alarm scheduler), `_start_web` is now
+  idempotent, and the `web_enabled` config gate (default `true`) is honored at
+  runtime — toggling it on via config hot-reload starts the server live.
+
 ## [1.0.0] — 2026-05-22
 
 Initial public release.
