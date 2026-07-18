@@ -9,6 +9,12 @@ import tempfile
 _TMP = tempfile.mkdtemp(prefix="alarm-tests-")
 os.environ["ALARM_PROJECT_ROOT"] = _TMP
 
+# The sandbox needs the shipped default sound: settings validation requires
+# default_sound to name an existing readable file.
+os.makedirs(os.path.join(_TMP, "sounds"), exist_ok=True)
+with open(os.path.join(_TMP, "sounds", "new-alarm-tone.mp3"), "wb") as _fh:
+    _fh.write(b"\0" * 64)
+
 import pytest  # noqa: E402
 
 
