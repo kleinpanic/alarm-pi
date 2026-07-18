@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% set active_tab = 'diagnostics' %}
+{% block title %}Diagnostics{% endblock %}
+{% block eyebrow %}Scheduler evidence and degraded states{% endblock %}
+{% block body %}
+<div class="mb-6"><p class="section-kicker">Evidence</p><h1 class="page-title">Diagnostics</h1><p class="mt-2 max-w-2xl text-sm text-slate-400">Recent scheduler decisions and component readiness, retained across daemon restarts.</p></div>
+<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{% for key, item in status.readiness.items() %}<div class="metric-card"><div class="mb-5 flex items-center justify-between"><span class="status-dot {{ 'bg-emerald-400' if item.ok else 'bg-amber-300' }}"></span><span class="badge {{ 'badge-ok' if item.ok else 'badge-warning' }}">{{ 'Ready' if item.ok else 'Check' }}</span></div><strong class="capitalize text-lg text-white">{{ key }}</strong><p class="mt-1 text-xs leading-5 text-slate-500">{{ item.label }}</p></div>{% endfor %}</section>
+<section class="panel mt-6"><div class="panel-heading"><div><p class="section-kicker">Recent events</p><h2 class="section-title">Scheduler diagnostics</h2></div><span class="badge">Last {{ diagnostics|length }}</span></div>
+{% if diagnostics %}<div class="overflow-x-auto"><table class="w-full min-w-[680px] text-left text-sm"><thead class="text-xs uppercase tracking-wider text-slate-500"><tr><th class="pb-3 font-medium">Observed</th><th class="pb-3 font-medium">Code</th><th class="pb-3 font-medium">Alarm</th><th class="pb-3 font-medium">Due</th></tr></thead><tbody class="divide-y divide-white/8">{% for item in diagnostics %}<tr><td class="py-3 pr-4 font-mono text-xs text-slate-400">{{ item.observed_at }}</td><td class="py-3 pr-4"><span class="badge badge-warning">{{ item.code|replace('_', ' ') }}</span></td><td class="py-3 pr-4 font-mono text-xs text-slate-400">{{ item.alarm_id or '—' }}</td><td class="py-3 font-mono text-xs text-slate-400">{{ item.due_at or item.scheduled_for or '—' }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty-state compact"><strong>No scheduler warnings recorded</strong><p>Diagnostics will appear here when a due occurrence is skipped, recovered, or rejected.</p></div>{% endif %}
+</section>
+{% endblock %}

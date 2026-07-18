@@ -19,14 +19,15 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timedelta
 
+from . import config
 from .config import (
-    load_alarms, load_settings, get_alarm_by_id, update_alarm,
-    delete_alarm as cfg_delete_alarm, add_alarm, generate_alarm_id,
+    load_alarms, load_settings, get_alarm_by_id, add_alarm,
     ensure_config_dir, PROJECT_ROOT,
 )
 from .models import Alarm
 from .scheduler import AlarmScheduler
 from .dayutil import parse_days, format_days, validate_time
+from .validation import ValidationError, validate_alarm_payload
 
 SERVICE = "alarm-daemon.service"
 
@@ -53,6 +54,45 @@ def _api(method: str, path: str, body: dict | None = None):
 
 # ---------------- config commands ----------------
 
+def _print_validation(error: ValidationError) -> int:
+    for issue in error.issues:
+        print(_c("31", f"{issue.field}: {issue.message}"))
+    return 1
+
+
+def _alarm_input(args, *, partial=False) -> dict:
+    payload = {}
+    aliases = {
+        "days": "days_of_week", "sound": "sound_path", "volume": "base_volume",
+        "irritable_duration": "irritable_duration_minutes",
+        "irritable_step": "irritable_volume_step",
+    }
+    for source, target in aliases.items():
+        if hasattr(args, source) and getattr(args, source) is not None:
+            value = getattr(args, source)
+            if source == "days":
+                try:
+                    value = parse_days(value)
+                except ValueError:
+                    value = []
+            if source == "sound":
+                value = None if value in (None, "default") else value
+            payload[target] = value
+    if hasattr(args, "label") and args.label is not None:
+        payload["label"] = args.label
+    if hasattr(args, "time") and args.time is not None:
+        try:
+            payload["time"] = validate_time(args.time)
+        except ValueError:
+            payload["time"] = args.time
+    if not partial:
+        payload.update({
+            "id": "pending", "enabled": not args.disabled,
+            "snoozable": not args.no_snooze, "irritable": args.irritable,
+            "sound_path": args.sound or None, "skip_dates": [],
+        })
+    return payload
+
 def cmd_list(args) -> int:
     alarms = load_alarms()
     if not alarms:
@@ -70,43 +110,33 @@ def cmd_list(args) -> int:
 
 def cmd_add(args) -> int:
     try:
-        time_str = validate_time(args.time)
-        days = parse_days(args.days)
-    except ValueError as e:
-        print(_c("31", f"Error: {e}"))
-        return 1
-    alarm = Alarm(
-        id=generate_alarm_id(), label=args.label, time=time_str, days_of_week=days,
-        enabled=not args.disabled, snoozable=not args.no_snooze, irritable=args.irritable,
-        sound_path=args.sound or None, base_volume=args.volume,
-        irritable_duration_minutes=args.irritable_duration, irritable_volume_step=args.irritable_step,
-    )
-    add_alarm(alarm)
-    print(_c("32", f"Added #{alarm.id}: '{alarm.label}' at {alarm.time} ({format_days(days)})"))
+        alarm = Alarm.from_payload(validate_alarm_payload(_alarm_input(args)))
+    except ValidationError as e:
+        return _print_validation(e)
+    alarm = add_alarm(alarm)
+    print(_c("32", f"Added #{alarm.id}: '{alarm.label}' at {alarm.time} ({format_days(alarm.days_of_week)})"))
     return 0
 
 
 def cmd_edit(args) -> int:
-    alarm = get_alarm_by_id(args.id)
-    if not alarm:
+    if not get_alarm_by_id(args.id):
         print(_c("31", f"Error: alarm not found: {args.id}"))
         return 1
     try:
-        if args.label is not None:
-            alarm.label = args.label
-        if args.time is not None:
-            alarm.time = validate_time(args.time)
-        if args.days is not None:
-            alarm.days_of_week = parse_days(args.days)
-    except ValueError as e:
-        print(_c("31", f"Error: {e}"))
-        return 1
-    if args.volume is not None:
-        alarm.base_volume = args.volume
-    if args.sound is not None:
-        alarm.sound_path = None if args.sound == "default" else args.sound
-    update_alarm(alarm)
-    print(_c("32", f"Updated #{alarm.id}: '{alarm.label}'"))
+        changes = validate_alarm_payload(_alarm_input(args, partial=True), partial=True)
+    except ValidationError as e:
+        return _print_validation(e)
+    updated = None
+    def mutate(document):
+        nonlocal updated
+        for alarm in document.alarms:
+            if alarm.id == args.id:
+                for field, value in changes.items():
+                    setattr(alarm, field, value)
+                updated = alarm
+                return
+    config.get_repository().transaction(mutate)
+    print(_c("32", f"Updated #{updated.id}: '{updated.label}'"))
     return 0
 
 
@@ -115,8 +145,14 @@ def _toggle(args, value: bool) -> int:
     if not alarm:
         print(_c("31", f"Error: alarm not found: {args.id}"))
         return 1
-    alarm.enabled = value
-    update_alarm(alarm)
+    if not value:
+        config.get_repository().disable_alarm(args.id)
+    else:
+        def enable(document):
+            for current in document.alarms:
+                if current.id == args.id:
+                    current.enabled = True
+        config.get_repository().transaction(enable)
     print(f"{'Enabled' if value else 'Disabled'} #{alarm.id}: '{alarm.label}'")
     return 0
 
@@ -138,7 +174,7 @@ def cmd_delete(args) -> int:
         if input(f"Delete #{alarm.id} '{alarm.label}'? [y/N] ").lower() not in ("y", "yes"):
             print("Cancelled")
             return 0
-    cfg_delete_alarm(args.id)
+    config.get_repository().delete_alarm(args.id)
     print(f"Deleted #{args.id}")
     return 0
 
@@ -159,9 +195,11 @@ def cmd_skip(args) -> int:
         except ValueError:
             print(_c("31", "Error: use YYYY-MM-DD, 'today', or 'tomorrow'"))
             return 1
-    if date not in alarm.skip_dates:
-        alarm.skip_dates.append(date)
-        update_alarm(alarm)
+    def skip(document):
+        for current in document.alarms:
+            if current.id == args.id and date not in current.skip_dates:
+                current.skip_dates.append(date)
+    config.get_repository().transaction(skip)
     print(f"Skipping #{alarm.id} on {date}")
     return 0
 

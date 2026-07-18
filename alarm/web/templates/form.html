@@ -1,40 +1,47 @@
 {% extends "base.html" %}
 {% set active_tab = 'alarms' %}
 {% block title %}{{ title }}{% endblock %}
+{% block eyebrow %}Alarm schedule editor{% endblock %}
 {% block body %}
 <div class="mb-4 flex items-center gap-3">
   <a href="{{ url_for('alarms_page') }}" class="text-slate-500 hover:text-slate-300">←</a>
   <h1 class="text-xl font-semibold">{{ title }}</h1>
 </div>
 
-{% if error %}
-  <div class="mb-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{{ error }}</div>
+{% if issues %}
+  <div id="validation-summary" role="alert" class="mb-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+    <p class="font-semibold">Please correct the following:</p>
+    <ul>{% for issue in issues %}<li>{{ issue.field }}: {{ issue.message }}</li>{% endfor %}</ul>
+  </div>
 {% endif %}
 
 {% set day_names = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
 <form method="post" class="space-y-5 rounded-2xl border border-edge bg-panel p-5">
   <div>
     <label class="mb-1 block text-sm text-slate-400">Label</label>
-    <input name="label" value="{{ alarm.label if alarm else '' }}" placeholder="Wake up" required
+    <input id="alarm-label" name="label" value="{{ values.label if values is not none else (alarm.label if alarm else '') }}" placeholder="Wake up" required{% if field_issues.label %} aria-describedby="alarm-label-error" aria-invalid="true"{% endif %}
       class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+    {% if field_issues.label %}<p id="alarm-label-error" class="mt-1 text-sm text-rose-300">{% for issue in field_issues.label %}{{ issue.message }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
   </div>
 
   <div class="grid grid-cols-2 gap-4">
     <div>
       <label class="mb-1 block text-sm text-slate-400">Time</label>
-      <input type="time" name="time" value="{{ alarm.time if alarm else '07:00' }}" required
+      <input id="alarm-time" type="time" name="time" value="{{ values.time if values is not none else (alarm.time if alarm else '07:00') }}" required{% if field_issues.time %} aria-describedby="alarm-time-error" aria-invalid="true"{% endif %}
         class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 font-mono outline-none focus:border-indigo-500">
+      {% if field_issues.time %}<p id="alarm-time-error" class="mt-1 text-sm text-rose-300">{{ field_issues.time|map(attribute='message')|join('; ') }}</p>{% endif %}
     </div>
     <div>
       <label class="mb-1 block text-sm text-slate-400">Base volume</label>
-      <input type="number" name="volume" min="0" max="100" value="{{ alarm.base_volume if alarm else 70 }}"
+      <input id="alarm-volume" type="number" name="volume" min="0" max="100" value="{{ values.volume if values is not none else (alarm.base_volume if alarm else 70) }}"{% if field_issues.volume %} aria-describedby="alarm-volume-error" aria-invalid="true"{% endif %}
         class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+      {% if field_issues.volume %}<p id="alarm-volume-error" class="mt-1 text-sm text-rose-300">{{ field_issues.volume|map(attribute='message')|join('; ') }}</p>{% endif %}
     </div>
   </div>
 
   <div>
     <label class="mb-2 block text-sm text-slate-400">Days</label>
-    <div class="flex flex-wrap gap-2">
+    <div id="alarm-days" class="flex flex-wrap gap-2"{% if field_issues.days %} aria-describedby="alarm-days-error" aria-invalid="true"{% endif %}>
       {% for d in range(7) %}
       <label class="cursor-pointer">
         <input type="checkbox" name="days" value="{{ d }}" class="peer sr-only" {{ 'checked' if d in selected_days else '' }}>
@@ -42,42 +49,46 @@
       </label>
       {% endfor %}
     </div>
+    {% if field_issues.days %}<p id="alarm-days-error" class="mt-1 text-sm text-rose-300">{{ field_issues.days|map(attribute='message')|join('; ') }}</p>{% endif %}
   </div>
 
   <div class="flex flex-wrap gap-5 pt-1">
     <label class="flex items-center gap-2 text-sm">
-      <input type="checkbox" name="snoozable" class="h-4 w-4 accent-indigo-500" {{ 'checked' if (alarm.snoozable if alarm else true) else '' }}> Snoozable
+      <input type="checkbox" name="snoozable" class="h-4 w-4 accent-indigo-500" {{ 'checked' if (values.snoozable if values is not none else (alarm.snoozable if alarm else true)) else '' }}> Snoozable
     </label>
     <label class="flex items-center gap-2 text-sm">
-      <input type="checkbox" name="irritable" class="h-4 w-4 accent-amber-500" {{ 'checked' if (alarm.irritable if alarm else false) else '' }}> Irritable mode
+      <input type="checkbox" name="irritable" class="h-4 w-4 accent-amber-500" {{ 'checked' if (values.irritable if values is not none else (alarm.irritable if alarm else false)) else '' }}> Irritable mode
     </label>
     <label class="flex items-center gap-2 text-sm">
-      <input type="checkbox" name="enabled" class="h-4 w-4 accent-indigo-500" {{ 'checked' if (alarm.enabled if alarm else true) else '' }}> Enabled
+      <input type="checkbox" name="enabled" class="h-4 w-4 accent-indigo-500" {{ 'checked' if (values.enabled if values is not none else (alarm.enabled if alarm else true)) else '' }}> Enabled
     </label>
   </div>
 
   <div class="grid grid-cols-2 gap-4">
     <div>
       <label class="mb-1 block text-sm text-slate-400">Irritable duration (min)</label>
-      <input type="number" name="irritable_duration" min="0" value="{{ alarm.irritable_duration_minutes if alarm else 5 }}"
+      <input id="alarm-duration" type="number" name="irritable_duration" min="0" value="{{ values.irritable_duration if values is not none else (alarm.irritable_duration_minutes if alarm else 5) }}"{% if field_issues.irritable_duration %} aria-describedby="alarm-duration-error" aria-invalid="true"{% endif %}
         class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+      {% if field_issues.irritable_duration %}<p id="alarm-duration-error" class="mt-1 text-sm text-rose-300">{{ field_issues.irritable_duration|map(attribute='message')|join('; ') }}</p>{% endif %}
     </div>
     <div>
       <label class="mb-1 block text-sm text-slate-400">Volume step (%/min)</label>
-      <input type="number" name="irritable_step" min="0" value="{{ alarm.irritable_volume_step if alarm else 10 }}"
+      <input id="alarm-step" type="number" name="irritable_step" min="0" value="{{ values.irritable_step if values is not none else (alarm.irritable_volume_step if alarm else 10) }}"{% if field_issues.irritable_step %} aria-describedby="alarm-step-error" aria-invalid="true"{% endif %}
         class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+      {% if field_issues.irritable_step %}<p id="alarm-step-error" class="mt-1 text-sm text-rose-300">{{ field_issues.irritable_step|map(attribute='message')|join('; ') }}</p>{% endif %}
     </div>
   </div>
 
   <div>
     <label class="mb-1 block text-sm text-slate-400">Sound path <span class="text-slate-600">(blank = default)</span></label>
-    <input name="sound" value="{{ alarm.sound_path or '' if alarm else '' }}" placeholder="/path/to/sound.mp3"
+    <input id="alarm-sound" name="sound" value="{{ values.sound if values is not none else (alarm.sound_path or '' if alarm else '') }}" placeholder="/path/to/sound.mp3"{% if field_issues.sound %} aria-describedby="alarm-sound-error" aria-invalid="true"{% endif %}
       class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 font-mono text-sm outline-none focus:border-indigo-500">
+    {% if field_issues.sound %}<p id="alarm-sound-error" class="mt-1 text-sm text-rose-300">{{ field_issues.sound|map(attribute='message')|join('; ') }}</p>{% endif %}
   </div>
 
   <div class="flex gap-3 pt-1">
-    <button type="submit" class="rounded-xl bg-indigo-500 px-5 py-2.5 font-semibold text-white hover:bg-indigo-400 transition">Save</button>
-    <a href="{{ url_for('alarms_page') }}" class="rounded-xl border border-edge px-5 py-2.5 text-slate-300 hover:bg-slate-700/30">Cancel</a>
+    <button type="submit" class="button button-primary">{{ 'Create alarm' if not alarm else 'Save alarm changes' }}</button>
+    <a href="{{ url_for('alarms_page') }}" class="button button-secondary">Return to alarms</a>
   </div>
 </form>
 {% endblock %}

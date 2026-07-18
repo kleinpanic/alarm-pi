@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% set active_tab = 'runtime' %}
+{% block title %}Runtime{% endblock %}
+{% block eyebrow %}Live queue and snoozes{% endblock %}
+{% block body %}
+<div class="mb-6"><p class="section-kicker">Daemon state</p><h1 class="page-title">Runtime</h1><p class="mt-2 max-w-2xl text-sm text-slate-400">The durable work the scheduler will recover after a restart.</p></div>
+<div class="grid gap-6 xl:grid-cols-2">
+  <section class="panel"><div class="panel-heading"><div><p class="section-kicker">Active work</p><h2 class="section-title">Ringing and queued</h2></div><span class="badge">{{ runtime.queue|length }} queued</span></div>
+    {% if runtime.active %}<div class="rounded-xl border border-rose-400/25 bg-rose-400/8 p-4"><p class="section-kicker text-rose-300">Ringing</p><div class="mt-2 flex items-center justify-between gap-4"><div><strong class="text-lg text-white">{{ runtime.active.label }}</strong><p class="text-sm text-rose-200/60">Started {{ runtime.active.started_at }}</p></div><time class="font-mono text-3xl text-rose-100">{{ runtime.active.time }}</time></div></div>{% else %}<div class="empty-state compact"><strong>No alarm is ringing</strong><p>The queue will promote automatically when work is due.</p></div>{% endif %}
+    <ol class="mt-4 divide-y divide-white/8">{% for item in runtime.queue %}<li class="flex items-center gap-4 py-3"><span class="grid h-8 w-8 place-items-center rounded-lg bg-white/5 text-xs text-slate-400">{{ loop.index }}</span><div class="min-w-0 flex-1"><p class="truncate font-medium text-white">{{ item.label }}</p><p class="text-xs text-slate-500">{{ item.kind }} · due {{ item.due_at }}</p></div><time class="font-mono text-slate-300">{{ item.time }}</time></li>{% endfor %}</ol>
+  </section>
+  <section class="panel"><div class="panel-heading"><div><p class="section-kicker">Deferred work</p><h2 class="section-title">Pending snoozes</h2></div><span class="badge badge-info">{{ runtime.snoozes|length }} pending</span></div>
+    {% if runtime.snoozes %}<ul class="divide-y divide-white/8">{% for item in runtime.snoozes %}<li class="flex items-center justify-between gap-4 py-4"><div><p class="font-medium text-white">{{ item.label }}</p><p class="text-xs text-slate-500">Returns at {{ item.due_at }}</p></div><span class="badge badge-info">Snoozed</span></li>{% endfor %}</ul>{% else %}<div class="empty-state compact"><strong>No pending snoozes</strong><p>Snoozed alarms appear here until they ring again.</p></div>{% endif %}
+  </section>
+</div>
+<section class="panel mt-6"><div class="panel-heading"><div><p class="section-kicker">Recovery marker</p><h2 class="section-title">Scheduler checkpoint</h2></div></div><code class="block overflow-x-auto rounded-xl bg-slate-950 p-4 text-sm text-amber-100">{{ runtime.scheduler_checkpoint or 'Awaiting first scheduler check' }}</code></section>
+{% endblock %}

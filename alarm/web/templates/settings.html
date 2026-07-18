@@ -1,37 +1,42 @@
 {% extends "base.html" %}
 {% set active_tab = 'settings' %}
 {% block title %}Settings{% endblock %}
+{% block eyebrow %}Defaults and Web access{% endblock %}
 {% block body %}
-<h1 class="mb-4 text-xl font-semibold">Settings</h1>
+<div class="mb-6"><p class="section-kicker">Configuration</p><h1 class="page-title">Settings</h1><p class="mt-2 text-sm text-slate-400">Alarm defaults and this control center's network access.</p></div>
+{% if issues %}<div id="validation-summary" role="alert" class="mb-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"><p class="font-semibold">Please correct the following:</p><ul>{% for issue in issues %}<li>{{ issue.field }}: {{ issue.message }}</li>{% endfor %}</ul></div>{% endif %}
 <form method="post" class="space-y-5 rounded-2xl border border-edge bg-panel p-5">
   <div class="grid grid-cols-2 gap-4">
     <div>
       <label class="mb-1 block text-sm text-slate-400">Default snooze (min)</label>
-      <input type="number" name="snooze" min="1" value="{{ s.default_snooze_minutes }}"
+      <input id="settings-snooze" type="number" name="snooze" min="1" value="{{ values.snooze if values is not none else s.default_snooze_minutes }}"{% if field_issues.default_snooze_minutes %} aria-describedby="settings-snooze-error" aria-invalid="true"{% endif %}
         class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+      {% if field_issues.default_snooze_minutes %}<p id="settings-snooze-error" class="mt-1 text-sm text-rose-300">{{ field_issues.default_snooze_minutes|map(attribute='message')|join('; ') }}</p>{% endif %}
     </div>
     <div>
       <label class="mb-1 block text-sm text-slate-400">Web port</label>
-      <input type="number" name="port" value="{{ s.web_port }}"
+      <input id="settings-port" type="number" name="port" value="{{ values.port if values is not none else s.web_port }}"{% if field_issues.web_port %} aria-describedby="settings-port-error" aria-invalid="true"{% endif %}
         class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 outline-none focus:border-indigo-500">
+      {% if field_issues.web_port %}<p id="settings-port-error" class="mt-1 text-sm text-rose-300">{{ field_issues.web_port|map(attribute='message')|join('; ') }}</p>{% endif %}
       <p class="mt-1 text-xs text-slate-600">Changing this needs a daemon restart.</p>
     </div>
   </div>
   <div>
     <label class="mb-1 block text-sm text-slate-400">LAN PIN <span class="text-slate-600">(blank = open on LAN; localhost always allowed)</span></label>
-    <input name="pin" value="{{ s.web_pin or '' }}" placeholder="(none)"
+    <input id="settings-pin" name="pin" value="{{ values.pin if values is not none else (s.web_pin or '') }}" placeholder="(none)"
       class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 font-mono outline-none focus:border-indigo-500">
   </div>
   <div>
     <label class="mb-1 block text-sm text-slate-400">Default sound</label>
-    <input name="sound" value="{{ s.default_sound }}"
+    <input id="settings-sound" name="sound" value="{{ values.sound if values is not none else s.default_sound }}"{% if field_issues.default_sound %} aria-describedby="settings-sound-error" aria-invalid="true"{% endif %}
       class="w-full rounded-xl border border-edge bg-ink px-4 py-2.5 font-mono text-sm outline-none focus:border-indigo-500">
+    {% if field_issues.default_sound %}<p id="settings-sound-error" class="mt-1 text-sm text-rose-300">{{ field_issues.default_sound|map(attribute='message')|join('; ') }}</p>{% endif %}
   </div>
   <div class="flex items-center gap-3 border-t border-edge pt-4 text-sm text-slate-500">
     <span>Audio player: <span class="font-mono text-slate-300">{{ s.audio_player }}</span></span>
     <span>·</span>
     <span>Max volume: <span class="text-slate-300">{{ s.max_volume }}%</span></span>
   </div>
-  <button type="submit" class="rounded-xl bg-indigo-500 px-5 py-2.5 font-semibold text-white hover:bg-indigo-400 transition">Save</button>
+  <button type="submit" class="button button-primary">Save settings</button>
 </form>
 {% endblock %}

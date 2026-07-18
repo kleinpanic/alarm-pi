@@ -1,34 +1,94 @@
 <!doctype html>
-<html lang="en" class="h-full">
+<html lang="en" class="h-full bg-obsidian">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>{% block title %}Alarm{% endblock %} · eulerpi4</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: { extend: {
-        fontFamily: { mono: ['ui-monospace','SFMono-Regular','Menlo','monospace'] },
-        colors: { ink: '#0b0e14', panel: '#141925', edge: '#222b3d' }
-      } }
-    }
-  </script>
+  <meta name="theme-color" content="#0b1017">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <title>{% block title %}Overview{% endblock %} · AlarmPi</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
-<body class="h-full bg-ink text-slate-200 antialiased">
-  <div class="mx-auto max-w-3xl px-4 pb-24">
-    <header class="flex items-center justify-between py-5">
-      <a href="{{ url_for('dashboard') }}" class="flex items-center gap-2 text-lg font-semibold tracking-tight">
-        <span class="text-2xl">⏰</span>
-        <span>Alarm<span class="text-indigo-400">Pi</span></span>
+<body class="min-h-full bg-obsidian text-slate-100 antialiased selection:bg-amber-300 selection:text-slate-950">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  {% set tab = active_tab|default('') %}
+  {% set navigation = [
+    ('home', 'dashboard', 'Overview', '⌂'),
+    ('alarms', 'alarms_page', 'Alarms', '◷'),
+    ('runtime', 'runtime_page', 'Runtime', '↻'),
+    ('system', 'system_page', 'System', '▣'),
+    ('settings', 'settings_page', 'Settings', '⌁'),
+    ('diagnostics', 'diagnostics_page', 'Diagnostics', '⌕')
+  ] %}
+
+  <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-white/8 bg-slate-950/90 px-4 py-5 backdrop-blur-xl lg:block">
+    <a href="{{ url_for('dashboard') }}" class="mb-8 flex items-center gap-3 rounded-xl px-2 py-1 text-white">
+      <span class="grid h-10 w-10 place-items-center rounded-xl border border-amber-300/30 bg-amber-300/10 font-mono text-lg text-amber-200" aria-hidden="true">AP</span>
+      <span><strong class="block tracking-tight">AlarmPi</strong><span class="text-xs text-slate-500">Bedside control center</span></span>
+    </a>
+    <nav aria-label="Primary" class="space-y-1">
+      {% for key, endpoint, label, icon in navigation %}
+      <a href="{{ url_for(endpoint) }}" {% if tab == key %}aria-current="page"{% endif %}
+         class="nav-link {{ 'nav-link-active' if tab == key else '' }}">
+        <span class="w-5 text-center font-mono text-lg" aria-hidden="true">{{ icon }}</span><span>{{ label }}</span>
       </a>
-      <nav class="flex items-center gap-1 text-sm">
-        {% set tab = active_tab|default('') %}
-        <a href="{{ url_for('dashboard') }}" class="rounded-lg px-3 py-1.5 {{ 'bg-indigo-500/15 text-indigo-300' if tab=='home' else 'text-slate-400 hover:text-slate-200' }}">Home</a>
-        <a href="{{ url_for('alarms_page') }}" class="rounded-lg px-3 py-1.5 {{ 'bg-indigo-500/15 text-indigo-300' if tab=='alarms' else 'text-slate-400 hover:text-slate-200' }}">Alarms</a>
-        <a href="{{ url_for('settings_page') }}" class="rounded-lg px-3 py-1.5 {{ 'bg-indigo-500/15 text-indigo-300' if tab=='settings' else 'text-slate-400 hover:text-slate-200' }}">Settings</a>
-      </nav>
+      {% endfor %}
+    </nav>
+    <div class="absolute bottom-5 left-4 right-4 rounded-xl border border-emerald-400/15 bg-emerald-400/5 p-3 text-xs text-emerald-100">
+      <div class="mb-1 flex items-center gap-2 font-semibold"><span class="status-dot bg-emerald-400"></span> Control channel online</div>
+      <p class="text-emerald-100/55">Alarm scheduling continues in the daemon.</p>
+    </div>
+  </aside>
+
+  <div class="min-h-screen lg:pl-64">
+    <header class="sticky top-0 z-20 border-b border-white/8 bg-obsidian/85 backdrop-blur-xl">
+      <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div>
+          <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/70">Alarm operations</p>
+          <p class="text-sm text-slate-400">{% block eyebrow %}Local appliance{% endblock %}</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="hidden text-right sm:block"><p class="js-clock font-mono text-lg font-semibold tabular-nums">--:--:--</p><p class="text-[11px] text-slate-500">local time</p></div>
+          <a href="{{ url_for('alarm_new') }}" class="button button-primary">New alarm</a>
+        </div>
+      </div>
     </header>
-    {% block body %}{% endblock %}
+
+    <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-10">
+      {% block body %}{% endblock %}
+    </main>
   </div>
+
+  <nav aria-label="Mobile primary" class="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-slate-950/95 px-2 pb-[max(.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden">
+    <div class="flex gap-1 overflow-x-auto">
+      {% for key, endpoint, label, icon in navigation %}
+      <a href="{{ url_for(endpoint) }}" {% if tab == key %}aria-current="page"{% endif %}
+         class="mobile-nav {{ 'mobile-nav-active' if tab == key else '' }}"><span aria-hidden="true" class="text-lg">{{ icon }}</span><span>{{ label }}</span></a>
+      {% endfor %}
+    </div>
+  </nav>
+
+  <section id="ringing-overlay" class="fixed inset-0 z-50 hidden items-end bg-slate-950/88 p-3 backdrop-blur-md sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby="ringing-title" aria-describedby="ringing-description">
+    <div class="w-full max-w-xl overflow-hidden rounded-[2rem] border border-rose-400/40 bg-[#180e13] shadow-2xl shadow-rose-950/60">
+      <div class="h-1.5 bg-rose-400"></div>
+      <div class="p-6 text-center sm:p-10">
+        <p class="mb-3 text-xs font-bold uppercase tracking-[0.28em] text-rose-300">Ringing now</p>
+        <p id="ringing-time" class="font-mono text-6xl font-semibold tabular-nums text-white sm:text-7xl">--:--</p>
+        <h2 id="ringing-title" class="mt-3 text-2xl font-semibold text-rose-100">Alarm</h2>
+        <p id="ringing-description" class="mt-1 text-sm text-rose-200/65">Audio is active. Choose an action below.</p>
+        <div class="mt-8 grid gap-3 sm:grid-cols-2">
+          <button type="button" data-ring-action="dismiss" class="button min-h-16 bg-rose-500 text-lg font-bold text-white hover:bg-rose-400">Dismiss alarm</button>
+          <button type="button" data-ring-action="snooze" data-minutes="5" class="button min-h-16 border border-amber-200/30 bg-amber-200/10 text-lg font-bold text-amber-100 hover:bg-amber-200/20">Snooze 5 minutes</button>
+        </div>
+        <div id="snooze-options" class="mt-3 flex flex-wrap justify-center gap-2" aria-label="Snooze duration">
+          {% for minutes in (5, 10, 15, 30) %}<button type="button" data-ring-action="snooze" data-minutes="{{ minutes }}" class="chip">{{ minutes }} min</button>{% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="app-toast" class="pointer-events-none fixed right-4 top-20 z-[60] hidden max-w-sm rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm shadow-2xl" role="status" aria-live="polite"></div>
+  <div id="assertive-announcer" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
 </body>
 </html>

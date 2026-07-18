@@ -22,11 +22,15 @@ ENV/
 .coverage
 htmlcov/
 .tox/
+node_modules/
 
 # --- Runtime state & local config (never publish personal schedule) ---
 config/alarms.json
 config/settings.json
 config/state.json
+config/operational.json
+config/operational.lock
+config/backups/
 config/.alarm.lock
 config/*.bak
 config/*.bak-*

@@ -1,0 +1,9 @@
+AlarmPi's control-center layout and component language are adapted from the
+TailAdmin HTML Community Edition by TailAdmin (MIT License):
+https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template
+
+The compiled stylesheet includes Tailwind CSS utilities (MIT License):
+https://github.com/tailwindlabs/tailwindcss
+
+Both projects are used under the MIT License. Their license notices and source
+links are retained here with the distributed Web assets.

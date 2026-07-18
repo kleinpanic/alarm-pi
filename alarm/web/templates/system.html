@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% set active_tab = 'system' %}
+{% block title %}System{% endblock %}
+{% block eyebrow %}Process and control-channel state{% endblock %}
+{% block body %}
+<div class="mb-6"><p class="section-kicker">Host</p><h1 class="page-title">System</h1><p class="mt-2 max-w-2xl text-sm text-slate-400">Read-only appliance state and safe restart guidance. Service stop is intentionally CLI-only.</p></div>
+<div class="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
+  <section class="panel"><div class="panel-heading"><div><p class="section-kicker">Current process</p><h2 class="section-title">Service readiness</h2></div><span class="badge {{ 'badge-ok' if process_running else 'badge-warning' }}">{{ 'Daemon loop active' if process_running else 'Web test process' }}</span></div>
+    <dl class="divide-y divide-white/8">
+      <div class="definition-row"><dt>Web binding</dt><dd><code>{{ settings.web_host }}:{{ settings.web_port }}</code></dd></div>
+      <div class="definition-row"><dt>Web control</dt><dd>{{ 'Enabled' if settings.web_enabled else 'Disabled after restart' }}</dd></div>
+      <div class="definition-row"><dt>LAN protection</dt><dd>{{ 'PIN configured' if settings.web_pin else 'No PIN configured' }}</dd></div>
+      <div class="definition-row"><dt>Scheduler checkpoint</dt><dd class="max-w-xs truncate">{{ status.scheduler_checkpoint or 'Pending' }}</dd></div>
+      <div class="definition-row"><dt>Audio adapter</dt><dd>{{ status.readiness.audio.label }}</dd></div>
+    </dl>
+  </section>
+  <section class="panel border-amber-200/20 bg-amber-200/[.035]"><p class="section-kicker">Restart-safe changes</p><h2 class="section-title mt-1">Apply staged network settings</h2><p class="mt-3 text-sm leading-6 text-slate-400">Host or port changes can sever this browser connection. Save settings first, then restart from a local terminal and reconnect at the new address.</p><code class="mt-5 block overflow-x-auto rounded-xl border border-white/8 bg-slate-950 px-4 py-3 text-sm text-amber-100">alarm service restart</code><p class="mt-4 text-xs text-slate-500">There is no service-stop button here by design.</p></section>
+</div>
+<section class="panel mt-6"><div class="panel-heading"><div><p class="section-kicker">Recovery</p><h2 class="section-title">Configuration backup</h2></div></div><div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><p class="max-w-2xl text-sm text-slate-400">Download the versioned operational document before editing or moving this installation.</p><a href="{{ url_for('api_export') }}" class="button button-secondary">Download backup</a></div></section>
+{% endblock %}
