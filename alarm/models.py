@@ -5,9 +5,17 @@ Uses Python dataclasses for clean, type-hinted structures.
 days_of_week uses 0-6 where 0=Monday, 6=Sunday (matches Python's weekday()).
 """
 
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, List, Mapping, Optional
+
+# Mirrors config.PROJECT_ROOT (config imports models, so it can't be imported
+# here). The default must be a file this repo ships — host paths like the ALSA
+# sample set don't exist everywhere (e.g. CI runners, minimal installs).
+_PROJECT_ROOT = Path(os.environ.get("ALARM_PROJECT_ROOT", str(Path(__file__).resolve().parent.parent)))
+DEFAULT_SOUND = str(_PROJECT_ROOT / "sounds" / "new-alarm-tone.mp3")
 
 
 @dataclass
@@ -142,7 +150,7 @@ class Settings:
     """Global application settings."""
     audio_player: str = "mpv"
     audio_player_args: List[str] = field(default_factory=lambda: ["--no-video", "--loop=inf"])
-    default_sound: str = "/usr/share/sounds/alsa/Front_Center.wav"
+    default_sound: str = DEFAULT_SOUND
     default_snooze_minutes: int = 5
     check_interval_seconds: int = 5
     max_volume: int = 100  # Cap for irritable mode escalation
@@ -180,7 +188,7 @@ class Settings:
         return cls(
             audio_player=data.get("audio_player", "mpv"),
             audio_player_args=data.get("audio_player_args", ["--no-video", "--loop=inf"]),
-            default_sound=data.get("default_sound", "/usr/share/sounds/alsa/Front_Center.wav"),
+            default_sound=data.get("default_sound", DEFAULT_SOUND),
             default_snooze_minutes=data.get("default_snooze_minutes", 5),
             check_interval_seconds=data.get("check_interval_seconds", 5),
             max_volume=data.get("max_volume", 100),

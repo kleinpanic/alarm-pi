@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from alarm import config
-from alarm.models import OperationalDocument
+from alarm.models import DEFAULT_SOUND, OperationalDocument
 from alarm.repository import (
     MigrationError,
     OperationalRepository,
@@ -62,7 +62,7 @@ def test_migrates_all_supported_legacy_values_once_without_enabling_alarm(tmp_pa
     settings_payload = {
         "audio_player": "vlc",
         "audio_player_args": ["--loop"],
-        "default_sound": "/usr/share/sounds/alsa/Front_Center.wav",
+        "default_sound": DEFAULT_SOUND,
         "default_snooze_minutes": 11,
         "check_interval_seconds": 3,
         "max_volume": 88,
@@ -195,7 +195,7 @@ def test_operational_document_rejects_invalid_nested_runtime_before_construction
         "settings": {
             "audio_player": "mpv",
             "audio_player_args": [],
-            "default_sound": "/usr/share/sounds/alsa/Front_Center.wav",
+            "default_sound": DEFAULT_SOUND,
             "default_snooze_minutes": 5,
             "check_interval_seconds": 5,
             "max_volume": 100,
