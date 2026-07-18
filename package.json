@@ -1,0 +1,11 @@
+{
+  "name": "alarmpi-web-assets",
+  "private": true,
+  "scripts": {
+    "build:web": "tailwindcss -i alarm/web/static/app.source.css -o alarm/web/static/app.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.1.11",
+    "tailwindcss": "4.1.11"
+  }
+}

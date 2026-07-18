@@ -9,8 +9,43 @@ dismissed remotely from the web UI.
 """
 
 import argparse
+import re
+import subprocess
 import urllib.request
 from datetime import datetime
+
+
+def _connected_output_geometry(xrandr_text: str):
+    """Parse `xrandr --query` output; return (w, h, x, y) of the primary
+    connected output, else the first connected one, else None.
+
+    The X root can be larger than any physical screen (stale framebuffer
+    after monitor changes), so centering on the root may place the window
+    in a region no monitor displays."""
+    primary = None
+    first = None
+    for line in xrandr_text.splitlines():
+        if " connected" not in line:
+            continue
+        m = re.search(r"(\d+)x(\d+)\+(\d+)\+(\d+)", line)
+        if not m:
+            continue
+        geom = tuple(int(v) for v in m.groups())
+        if " primary " in line:
+            primary = geom
+        if first is None:
+            first = geom
+    return primary or first
+
+
+def _visible_geometry():
+    try:
+        out = subprocess.run(
+            ["xrandr", "--query"], capture_output=True, text=True, timeout=2
+        )
+        return _connected_output_geometry(out.stdout)
+    except Exception:
+        return None
 
 
 def _post(port: int, path: str) -> None:
@@ -91,8 +126,15 @@ def run_popup(port, label, time_str, snoozable, snooze_minutes, irritable):
 
     root.update_idletasks()
     w, h = max(root.winfo_width(), 400), max(root.winfo_height(), 300)
-    x = (root.winfo_screenwidth() - w) // 2
-    y = (root.winfo_screenheight() - h) // 2
+    monitor = _visible_geometry()
+    if monitor:
+        mw, mh, mx, my = monitor
+        w, h = min(w, mw), min(h, mh)
+        x = mx + (mw - w) // 2
+        y = my + (mh - h) // 2
+    else:
+        x = (root.winfo_screenwidth() - w) // 2
+        y = (root.winfo_screenheight() - h) // 2
     root.geometry(f"{w}x{h}+{x}+{y}")
     root.mainloop()
 

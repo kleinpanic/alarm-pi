@@ -6,17 +6,13 @@ persisted to config/state.json so a daemon restart doesn't drop a pending
 snooze or forget that an alarm is ringing.
 """
 
-import json
-import logging
 import threading
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
-from .config import STATE_FILE, _atomic_write_json
-from .models import Alarm
-
-logger = logging.getLogger(__name__)
+from .config import get_repository
+from .models import Alarm, RuntimeData
 
 
 @dataclass
@@ -33,8 +29,9 @@ class RingingInfo:
 class RuntimeState:
     """Thread-safe runtime state with JSON persistence."""
 
-    def __init__(self) -> None:
+    def __init__(self, repository=None) -> None:
         self._lock = threading.RLock()
+        self._repository = repository or get_repository()
         self._snoozes: Dict[str, datetime] = {}
         self._ringing: Optional[RingingInfo] = None
         self.load()
@@ -42,37 +39,35 @@ class RuntimeState:
     # ---- persistence ----
 
     def load(self) -> None:
-        if not STATE_FILE.exists():
-            return
-        try:
-            with open(STATE_FILE, "r") as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, OSError) as e:
-            logger.warning(f"Could not read state.json ({e}); starting clean")
-            return
         with self._lock:
-            self._snoozes = {
-                aid: datetime.fromisoformat(ts)
-                for aid, ts in (data.get("snoozes") or {}).items()
-            }
-            r = data.get("ringing")
-            self._ringing = RingingInfo(**r) if r else None
+            self._sync_from_runtime(self._repository.snapshot().runtime)
 
-    def _persist_locked(self) -> None:
-        data = {
-            "snoozes": {aid: dt.isoformat() for aid, dt in self._snoozes.items()},
-            "ringing": asdict(self._ringing) if self._ringing else None,
+    def _sync_from_runtime(self, runtime: RuntimeData) -> None:
+        self._snoozes = {
+            item["alarm_id"]: datetime.fromisoformat(item["due_at"])
+            for item in runtime.snoozes
         }
-        try:
-            _atomic_write_json(STATE_FILE, data)
-        except OSError as e:
-            logger.error(f"Failed to persist state.json: {e}")
+        if runtime.active:
+            fields = RingingInfo.__dataclass_fields__
+            self._ringing = RingingInfo(
+                **{name: runtime.active[name] for name in fields}
+            )
+        else:
+            self._ringing = None
+
+    def _mutate_runtime_locked(self, mutation: Callable[[RuntimeData], None]) -> None:
+        def apply(document):
+            mutation(document.runtime)
+            return document.runtime
+
+        runtime = self._repository.transaction(apply)
+        self._sync_from_runtime(runtime)
 
     # ---- ringing ----
 
     def set_ringing(self, alarm: Alarm) -> None:
         with self._lock:
-            self._ringing = RingingInfo(
+            ringing = RingingInfo(
                 alarm_id=alarm.id,
                 label=alarm.label,
                 time=alarm.time,
@@ -80,38 +75,58 @@ class RuntimeState:
                 irritable=alarm.irritable,
                 started_at=datetime.now().isoformat(timespec="seconds"),
             )
-            self._persist_locked()
+            self._mutate_runtime_locked(
+                lambda runtime: setattr(runtime, "active", asdict(ringing))
+            )
 
     def clear_ringing(self) -> None:
         with self._lock:
-            self._ringing = None
-            self._persist_locked()
+            self._mutate_runtime_locked(lambda runtime: setattr(runtime, "active", None))
 
     def get_ringing(self) -> Optional[RingingInfo]:
         with self._lock:
-            return self._ringing
+            return RingingInfo(**asdict(self._ringing)) if self._ringing else None
 
     # ---- snooze ----
 
     def set_snooze(self, alarm_id: str, when: datetime) -> None:
         with self._lock:
-            self._snoozes[alarm_id] = when
-            self._persist_locked()
+            def set_value(runtime: RuntimeData) -> None:
+                runtime.snoozes = [
+                    item for item in runtime.snoozes if item["alarm_id"] != alarm_id
+                ]
+                runtime.snoozes.append({"alarm_id": alarm_id, "due_at": when.isoformat()})
+
+            self._mutate_runtime_locked(set_value)
 
     def cancel_snooze(self, alarm_id: str) -> None:
         with self._lock:
-            if self._snoozes.pop(alarm_id, None) is not None:
-                self._persist_locked()
+            self._mutate_runtime_locked(
+                lambda runtime: setattr(
+                    runtime,
+                    "snoozes",
+                    [item for item in runtime.snoozes if item["alarm_id"] != alarm_id],
+                )
+            )
 
     def pop_due_snoozes(self, now: Optional[datetime] = None) -> List[str]:
         """Return alarm IDs whose snooze is due, removing them from the schedule."""
         now = now or datetime.now()
         with self._lock:
-            due = [aid for aid, when in self._snoozes.items() if now >= when]
-            if due:
-                for aid in due:
-                    del self._snoozes[aid]
-                self._persist_locked()
+            due: List[str] = []
+
+            def pop(runtime: RuntimeData) -> None:
+                nonlocal due
+                due = [
+                    item["alarm_id"]
+                    for item in runtime.snoozes
+                    if now >= datetime.fromisoformat(item["due_at"])
+                ]
+                runtime.snoozes = [
+                    item for item in runtime.snoozes if item["alarm_id"] not in due
+                ]
+
+            self._mutate_runtime_locked(pop)
             return due
 
     def snoozes(self) -> Dict[str, datetime]:

@@ -16,6 +16,7 @@ from typing import List, Optional, Tuple
 import logging
 
 from .models import Alarm, Settings
+from .repository import OperationalRepository
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,20 @@ ALARMS_FILE = CONFIG_DIR / "alarms.json"
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 STATE_FILE = CONFIG_DIR / "state.json"
 LOCK_FILE = CONFIG_DIR / ".alarm.lock"
+OPERATIONAL_FILE = CONFIG_DIR / "operational.json"
+OPERATIONAL_LOCK_FILE = CONFIG_DIR / "operational.lock"
+BACKUP_DIR = CONFIG_DIR / "backups"
+QUARANTINE_DIR = CONFIG_DIR / "quarantine"
+
+_repository: Optional[OperationalRepository] = None
+
+
+def get_repository() -> OperationalRepository:
+    """Return the process-local repository using the compatibility config root."""
+    global _repository
+    if _repository is None:
+        _repository = OperationalRepository(CONFIG_DIR)
+    return _repository
 
 
 def ensure_config_dir() -> None:
@@ -63,63 +78,23 @@ def _atomic_write_json(path: Path, data) -> None:
 
 
 def load_settings() -> Settings:
-    """Load settings from JSON file, creating defaults if missing."""
-    ensure_config_dir()
-
-    if not SETTINGS_FILE.exists():
-        logger.info(f"Settings file not found, creating defaults at {SETTINGS_FILE}")
-        settings = Settings()
-        save_settings(settings)
-        return settings
-
-    try:
-        with open(SETTINGS_FILE, "r") as f:
-            data = json.load(f)
-        return Settings.from_dict(data)
-    except json.JSONDecodeError as e:
-        logger.error(f"Malformed settings JSON: {e}; using defaults")
-        return Settings()
-    except Exception as e:
-        logger.error(f"Error loading settings: {e}")
-        return Settings()
+    """Load a detached settings snapshot from the operational repository."""
+    return get_repository().snapshot().settings
 
 
 def save_settings(settings: Settings) -> None:
-    """Save settings to JSON file (atomic)."""
-    _atomic_write_json(SETTINGS_FILE, settings.to_dict())
-    logger.debug(f"Settings saved to {SETTINGS_FILE}")
+    """Validate and save settings through the aggregate transaction."""
+    get_repository().set_settings(settings)
 
 
 def load_alarms() -> List[Alarm]:
-    """Load alarms from JSON file. Returns empty list if missing/malformed."""
-    ensure_config_dir()
-
-    if not ALARMS_FILE.exists():
-        logger.info(f"Alarms file not found at {ALARMS_FILE}, starting empty")
-        save_alarms([])
-        return []
-
-    try:
-        with open(ALARMS_FILE, "r") as f:
-            data = json.load(f)
-
-        if not isinstance(data, list):
-            logger.error("Alarms JSON should be a list")
-            return []
-
-        return [Alarm.from_dict(item) for item in data]
-    except json.JSONDecodeError as e:
-        logger.error(f"Malformed alarms JSON: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"Error loading alarms: {e}")
-        return []
+    """Load detached alarms from the operational repository."""
+    return get_repository().snapshot().alarms
 
 
 def save_alarms(alarms: List[Alarm]) -> None:
-    """Save alarms to JSON file (atomic)."""
-    _atomic_write_json(ALARMS_FILE, [a.to_dict() for a in alarms])
-    logger.debug(f"Saved {len(alarms)} alarms to {ALARMS_FILE}")
+    """Replace alarms through one aggregate transaction."""
+    get_repository().replace_alarms(alarms)
 
 
 def get_alarm_by_id(alarm_id: str) -> Optional[Alarm]:
@@ -132,33 +107,17 @@ def get_alarm_by_id(alarm_id: str) -> Optional[Alarm]:
 
 def update_alarm(alarm: Alarm) -> bool:
     """Update existing alarm. Returns True if found and updated."""
-    with config_lock():
-        alarms = load_alarms()
-        for i, a in enumerate(alarms):
-            if a.id == alarm.id:
-                alarms[i] = alarm
-                save_alarms(alarms)
-                return True
-    return False
+    return get_repository().update_alarm(alarm)
 
 
 def delete_alarm(alarm_id: str) -> bool:
     """Delete alarm by ID. Returns True if found and deleted."""
-    with config_lock():
-        alarms = load_alarms()
-        kept = [a for a in alarms if a.id != alarm_id]
-        if len(kept) < len(alarms):
-            save_alarms(kept)
-            return True
-    return False
+    return get_repository().delete_alarm(alarm_id)
 
 
-def add_alarm(alarm: Alarm) -> None:
-    """Add new alarm to config."""
-    with config_lock():
-        alarms = load_alarms()
-        alarms.append(alarm)
-        save_alarms(alarms)
+def add_alarm(alarm: Alarm) -> Alarm:
+    """Create an alarm with its repository-allocated ID."""
+    return get_repository().create_alarm(alarm)
 
 
 def generate_alarm_id() -> str:
@@ -172,7 +131,6 @@ def generate_alarm_id() -> str:
 
 
 def get_config_mtime() -> Tuple[float, float]:
-    """Return (alarms_mtime, settings_mtime); 0.0 for missing files."""
-    alarms_mtime = ALARMS_FILE.stat().st_mtime if ALARMS_FILE.exists() else 0.0
-    settings_mtime = SETTINGS_FILE.stat().st_mtime if SETTINGS_FILE.exists() else 0.0
-    return (alarms_mtime, settings_mtime)
+    """Return aggregate mtime in the legacy two-value compatibility shape."""
+    mtime = OPERATIONAL_FILE.stat().st_mtime if OPERATIONAL_FILE.exists() else 0.0
+    return (mtime, mtime)

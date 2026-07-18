@@ -22,6 +22,27 @@ def test_add_rejects_bad_time():
     assert cli.main(["add", "--label", "x", "--time", "25:99", "--days", "daily"]) == 1
 
 
+def test_add_prints_every_structured_validation_issue(capsys):
+    result = cli.main([
+        "add", "--label", " ", "--time", "25:99", "--days", "daily",
+        "--volume", "101", "--irritable-duration", "0", "--irritable-step", "0",
+        "--sound", "/missing/alarm.wav",
+    ])
+    output = capsys.readouterr().out
+    assert result == 1
+    for field in ("label", "time", "sound_path", "base_volume", "irritable_duration_minutes", "irritable_volume_step"):
+        assert f"{field}:" in output
+
+
+def test_edit_prints_all_structured_issues(capsys):
+    assert cli.main(["add", "--label", "Wake", "--time", "07:00", "--days", "daily"]) == 0
+    capsys.readouterr()
+    result = cli.main(["edit", "1", "--label", " ", "--time", "25:99", "--volume", "101"])
+    output = capsys.readouterr().out
+    assert result == 1
+    assert "label:" in output and "time:" in output and "base_volume:" in output
+
+
 def test_next_lists_upcoming(capsys):
     cli.main(["add", "--label", "Morning", "--time", "06:00", "--days", "daily"])
     assert cli.main(["next", "-n", "2"]) == 0

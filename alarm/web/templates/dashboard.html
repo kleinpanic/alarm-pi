@@ -1,59 +1,57 @@
 {% extends "base.html" %}
 {% set active_tab = 'home' %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}Overview{% endblock %}
+{% block eyebrow %}Readiness and next alarms{% endblock %}
 {% block body %}
-<!-- Ringing banner (hidden unless an alarm is active) -->
-<div id="ringing" class="hidden mb-6 rounded-2xl border border-rose-500/40 bg-rose-500/10 p-6 text-center">
-  <div class="text-xs uppercase tracking-widest text-rose-300/80">Ringing now</div>
-  <div id="ringing-label" class="mt-1 text-3xl font-bold text-rose-200">—</div>
-  <div id="ringing-time" class="text-rose-300/70"></div>
-  <div class="mt-5 flex justify-center gap-3">
-    <button onclick="act('/api/ringing/dismiss')"
-      class="rounded-xl bg-rose-500 px-6 py-3 font-semibold text-white shadow-lg shadow-rose-500/30 hover:bg-rose-400 active:scale-95 transition">Dismiss</button>
-    <button id="snooze-btn" onclick="act('/api/ringing/snooze')"
-      class="rounded-xl bg-sky-500 px-6 py-3 font-semibold text-white shadow-lg shadow-sky-500/30 hover:bg-sky-400 active:scale-95 transition">Snooze</button>
-  </div>
+<div class="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+  <div><p class="section-kicker">Overview</p><h1 class="page-title">Your next wake-up, at a glance.</h1></div>
+  <p class="max-w-md text-sm text-slate-400">Live daemon state, schedule readiness, and the next five alarm occurrences.</p>
 </div>
 
-<div class="grid grid-cols-2 gap-4">
-  <div class="rounded-2xl border border-edge bg-panel p-5">
-    <div class="text-xs uppercase tracking-widest text-slate-500">Now</div>
-    <div id="clock" class="mt-1 font-mono text-4xl font-bold tabular-nums">{{ status.now }}</div>
+<section class="grid gap-4 lg:grid-cols-[1.35fr_.65fr]" aria-labelledby="next-heading">
+  <div class="hero-panel">
+    <div class="relative z-10">
+      <p class="section-kicker">Next alarm</p>
+      {% if status.next %}
+      <p class="mt-4 font-mono text-6xl font-semibold tracking-[-0.06em] text-white sm:text-8xl">{{ status.next.time }}</p>
+      <h2 id="next-heading" class="mt-3 text-2xl font-semibold text-amber-100">{{ status.next.label }}</h2>
+      <p class="mt-1 text-slate-400">{{ status.next.when_human }} · {{ status.next.days }}</p>
+      {% else %}
+      <h2 id="next-heading" class="mt-8 text-3xl font-semibold">No alarm is scheduled</h2>
+      <p class="mt-2 max-w-md text-slate-400">Create or enable an alarm to put the scheduler back on watch.</p>
+      <a href="{{ url_for('alarm_new') }}" class="button button-primary mt-6">Create an alarm</a>
+      {% endif %}
+    </div>
   </div>
-  <div class="rounded-2xl border border-edge bg-panel p-5">
-    <div class="text-xs uppercase tracking-widest text-slate-500">Next alarm</div>
-    {% if status.next %}
-      <div class="mt-1 text-2xl font-bold text-indigo-300">{{ status.next.time }}</div>
-      <div class="truncate text-sm text-slate-400">{{ status.next.label }} · {{ status.next.when_human }}</div>
-    {% else %}
-      <div class="mt-1 text-2xl font-bold text-slate-600">none</div>
-    {% endif %}
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-1">
+    <div class="metric-card"><span class="metric-label">Enabled</span><strong class="metric-value">{{ status.enabled_count }}<small>/{{ status.alarm_count }}</small></strong><span class="metric-note">configured alarms</span></div>
+    <div class="metric-card"><span class="metric-label">Waiting</span><strong class="metric-value">{{ status.queue_count + status.snooze_count }}</strong><span class="metric-note">queued or snoozed</span></div>
   </div>
-</div>
+</section>
 
-<div class="mt-4 flex items-center justify-between rounded-2xl border border-edge bg-panel p-5">
-  <div>
-    <div class="text-2xl font-bold">{{ status.enabled_count }}<span class="text-slate-500">/{{ status.alarm_count }}</span></div>
-    <div class="text-sm text-slate-500">alarms enabled</div>
+<section class="mt-6 grid gap-6 xl:grid-cols-[1.15fr_.85fr]">
+  <div class="panel">
+    <div class="panel-heading"><div><p class="section-kicker">Schedule</p><h2 class="section-title">Coming up</h2></div><a href="{{ url_for('alarms_page') }}" class="text-link">Manage alarms</a></div>
+    {% if status.upcoming %}
+    <ol class="divide-y divide-white/8">
+      {% for alarm in status.upcoming %}
+      <li class="flex items-center gap-4 py-4 first:pt-1 last:pb-0">
+        <time class="w-20 font-mono text-xl font-semibold tabular-nums text-amber-100">{{ alarm.time }}</time>
+        <div class="min-w-0 flex-1"><p class="truncate font-semibold text-white">{{ alarm.label }}</p><p class="text-sm text-slate-500">{{ alarm.when_human }} · {{ alarm.days }}</p></div>
+        {% if loop.first %}<span class="badge badge-accent">Next</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}<div class="empty-state"><strong>No upcoming alarms</strong><p>Enable an alarm to populate this schedule.</p></div>{% endif %}
   </div>
-  <a href="{{ url_for('alarm_new') }}" class="rounded-xl bg-indigo-500 px-4 py-2.5 font-medium text-white hover:bg-indigo-400 transition">+ New alarm</a>
-</div>
 
-<script>
-async function act(path){ await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); refresh(); }
-async function refresh(){
-  try {
-    const s = await (await fetch('/api/status')).json();
-    document.getElementById('clock').textContent = s.now;
-    const box = document.getElementById('ringing');
-    if (s.ringing){
-      box.classList.remove('hidden');
-      document.getElementById('ringing-label').textContent = s.ringing.label;
-      document.getElementById('ringing-time').textContent = 'scheduled ' + s.ringing.time;
-      document.getElementById('snooze-btn').style.display = s.ringing.snoozable ? '' : 'none';
-    } else { box.classList.add('hidden'); }
-  } catch(e){}
-}
-setInterval(refresh, 2000); refresh();
-</script>
+  <div class="panel">
+    <div class="panel-heading"><div><p class="section-kicker">Appliance</p><h2 class="section-title">Readiness</h2></div><a href="{{ url_for('diagnostics_page') }}" class="text-link">View diagnostics</a></div>
+    <ul class="space-y-3">
+      {% for key, item in status.readiness.items() %}
+      <li class="readiness-row"><span class="status-dot {{ 'bg-emerald-400' if item.ok else 'bg-amber-300' }}"></span><div class="min-w-0 flex-1"><p class="capitalize text-slate-200">{{ key }}</p><p class="truncate text-xs text-slate-500">{{ item.label }}</p></div><span class="badge {{ 'badge-ok' if item.ok else 'badge-warning' }}">{{ 'Ready' if item.ok else 'Check' }}</span></li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
 {% endblock %}

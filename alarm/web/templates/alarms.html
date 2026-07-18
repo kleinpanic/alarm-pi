@@ -1,50 +1,40 @@
 {% extends "base.html" %}
 {% set active_tab = 'alarms' %}
 {% block title %}Alarms{% endblock %}
+{% block eyebrow %}Schedule management{% endblock %}
 {% block body %}
-<div class="mb-4 flex items-center justify-between">
-  <h1 class="text-xl font-semibold">Alarms</h1>
-  <a href="{{ url_for('alarm_new') }}" class="rounded-xl bg-indigo-500 px-4 py-2 font-medium text-white hover:bg-indigo-400 transition">+ New</a>
+<div class="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+  <div><p class="section-kicker">Schedule</p><h1 class="page-title">Alarms</h1><p class="mt-2 text-sm text-slate-400">Search, test, skip, duplicate, or disable without leaving this view.</p></div>
+  <div class="flex gap-3"><label class="relative block"><span class="sr-only">Search alarms</span><input id="alarm-search" type="search" placeholder="Search alarms" class="field min-w-52 pl-10"><span class="pointer-events-none absolute left-3 top-3 text-slate-500" aria-hidden="true">⌕</span></label><a href="{{ url_for('alarm_new') }}" class="button button-primary">New alarm</a></div>
 </div>
 
-{% if not alarms %}
-  <div class="rounded-2xl border border-edge bg-panel p-10 text-center text-slate-500">
-    No alarms yet. <a href="{{ url_for('alarm_new') }}" class="text-indigo-400">Create one →</a>
-  </div>
-{% endif %}
+{% if not alarms %}<div class="empty-state panel"><strong>Your schedule is empty</strong><p>Create an alarm to give the daemon its first wake-up time.</p><a href="{{ url_for('alarm_new') }}" class="button button-primary mt-5">Create an alarm</a></div>{% endif %}
 
-<div class="space-y-3">
+<div id="alarm-list" class="space-y-3">
 {% for a in alarms %}
-  <div class="rounded-2xl border border-edge bg-panel p-4" data-id="{{ a.id }}">
-    <div class="flex items-center gap-4">
-      <div class="font-mono text-3xl font-bold tabular-nums {{ 'text-slate-200' if a.enabled else 'text-slate-600 line-through' }}">{{ a.time }}</div>
-      <div class="min-w-0 flex-1">
-        <div class="truncate font-medium">{{ a.label }}</div>
-        <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-          <span class="rounded-md bg-slate-700/50 px-2 py-0.5 text-slate-300">{{ a.days_of_week|fmtdays }}</span>
-          {% if a.snoozable %}<span class="rounded-md bg-sky-500/15 px-2 py-0.5 text-sky-300">snooze</span>{% endif %}
-          {% if a.irritable %}<span class="rounded-md bg-amber-500/15 px-2 py-0.5 text-amber-300">irritable</span>{% endif %}
-          {% if a.skip_dates %}<span class="rounded-md bg-slate-700/50 px-2 py-0.5 text-slate-400">{{ a.skip_dates|length }} skip</span>{% endif %}
-        </div>
+  <article class="alarm-card" data-alarm-card data-search="{{ (a.label ~ ' ' ~ a.time ~ ' ' ~ (a.days_of_week|fmtdays))|lower }}">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div class="flex min-w-0 flex-1 items-center gap-4">
+        <time class="font-mono text-3xl font-semibold tabular-nums {{ 'text-white' if a.enabled else 'text-slate-600 line-through' }}">{{ a.time }}</time>
+        <div class="min-w-0"><h2 class="truncate font-semibold text-white">{{ a.label }}</h2><p class="mt-1 text-sm text-slate-500">{{ a.days_of_week|fmtdays }}</p></div>
       </div>
-      <button onclick="toggle('{{ a.id }}', {{ 'false' if a.enabled else 'true' }})"
-        class="relative h-6 w-11 shrink-0 rounded-full transition {{ 'bg-indigo-500' if a.enabled else 'bg-slate-600' }}">
-        <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all {{ 'left-[22px]' if a.enabled else 'left-0.5' }}"></span>
-      </button>
+      <div class="flex flex-wrap items-center gap-2">
+        {% if a.snoozable %}<span class="badge badge-info">Snooze</span>{% endif %}
+        {% if a.irritable %}<span class="badge badge-warning">Escalates</span>{% endif %}
+        {% if a.skip_dates %}<span class="badge">{{ a.skip_dates|length }} skipped</span>{% endif %}
+        <button type="button" class="toggle {{ 'toggle-on' if a.enabled else '' }}" data-post="/api/alarms/{{ a.id }}/{{ 'disable' if a.enabled else 'enable' }}" data-success="Alarm {{ 'disabled' if a.enabled else 'enabled' }}" aria-label="{{ 'Disable' if a.enabled else 'Enable' }} {{ a.label }}" aria-pressed="{{ 'true' if a.enabled else 'false' }}"><span></span></button>
+      </div>
     </div>
-    <div class="mt-3 flex gap-2 text-sm">
-      <a href="{{ url_for('alarm_edit', aid=a.id) }}" class="rounded-lg border border-edge px-3 py-1.5 text-slate-300 hover:bg-slate-700/30">Edit</a>
-      <button onclick="post('/api/alarms/{{ a.id }}/test')" class="rounded-lg border border-edge px-3 py-1.5 text-slate-300 hover:bg-slate-700/30">Test</button>
-      <button onclick="post('/api/alarms/{{ a.id }}/skip')" class="rounded-lg border border-edge px-3 py-1.5 text-slate-300 hover:bg-slate-700/30">Skip today</button>
-      <button onclick="del('{{ a.id }}')" class="ml-auto rounded-lg border border-rose-500/30 px-3 py-1.5 text-rose-300 hover:bg-rose-500/10">Delete</button>
+    <div class="mt-4 flex flex-wrap gap-2 border-t border-white/8 pt-4">
+      <a href="{{ url_for('alarm_edit', aid=a.id) }}" class="button button-secondary button-small">Edit alarm</a>
+      <button type="button" class="button button-secondary button-small" data-post="/api/alarms/{{ a.id }}/test" data-success="Audio test started">Test audio</button>
+      <button type="button" class="button button-secondary button-small" data-post="/api/alarms/{{ a.id }}/skip" data-success="Alarm skipped today">Skip today</button>
+      <button type="button" class="button button-secondary button-small" data-post="/api/alarms/{{ a.id }}/duplicate" data-success="Disabled copy created">Duplicate</button>
+      <button type="button" class="button button-danger button-small sm:ml-auto" data-delete="/api/alarms/{{ a.id }}" data-confirm="Delete ‘{{ a.label }}’? This also cancels its pending snoozes." data-success="Alarm deleted">Delete alarm</button>
     </div>
-  </div>
+    {% if a.skip_dates %}<details class="mt-3 text-sm"><summary class="cursor-pointer text-slate-400 hover:text-white">Manage skipped dates</summary><div class="mt-2 flex flex-wrap gap-2">{% for date in a.skip_dates %}<button type="button" class="chip" data-delete="/api/alarms/{{ a.id }}/skip/{{ date }}" data-success="Skip removed">{{ date }} ×</button>{% endfor %}</div></details>{% endif %}
+  </article>
 {% endfor %}
 </div>
-
-<script>
-async function post(p, body){ await fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}); }
-async function toggle(id, on){ await post('/api/alarms/'+id+(on?'/enable':'/disable')); location.reload(); }
-async function del(id){ if(confirm('Delete this alarm?')){ await fetch('/api/alarms/'+id,{method:'DELETE'}); location.reload(); } }
-</script>
+<p id="alarm-search-empty" class="empty-state panel hidden">No alarms match that search. Try a label, time, or weekday.</p>
 {% endblock %}
