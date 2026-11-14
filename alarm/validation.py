@@ -11,6 +11,11 @@ from typing import Any, Mapping, Sequence
 
 LABEL_MAX_LENGTH = 120
 
+
+def _project_root() -> Path:
+    # Same rule as config.PROJECT_ROOT; read at call time so tests can redirect it.
+    return Path(os.environ.get("ALARM_PROJECT_ROOT", str(Path(__file__).resolve().parent.parent)))
+
 ALARM_FIELDS = (
     "id",
     "label",
@@ -179,7 +184,12 @@ def _readable_file(value: Any, field: str, issues: list[FieldIssue], *, nullable
     if text is None:
         return None
     try:
-        path = Path(text).expanduser().resolve(strict=True)
+        path = Path(text).expanduser()
+        if not path.is_absolute():
+            # Documented contract: relative sound paths are relative to the
+            # project root, not to whatever directory the CLI was started in.
+            path = _project_root() / path
+        path = path.resolve(strict=True)
     except (OSError, RuntimeError):
         _issue(issues, field, "path", "must name an existing readable regular file")
         return None
