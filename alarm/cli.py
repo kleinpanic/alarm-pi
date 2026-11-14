@@ -47,6 +47,13 @@ def _api(method: str, path: str, body: dict | None = None):
     try:
         with urllib.request.urlopen(req, timeout=5) as r:
             return json.loads(r.read() or "null")
+    except urllib.error.HTTPError as e:
+        # The daemon answered with an error status (e.g. 404/409): that is a
+        # result, not "daemon unreachable".
+        try:
+            return json.loads(e.read() or "null") or {}
+        except ValueError:
+            return {"error": f"HTTP {e.code}"}
     except urllib.error.URLError as e:
         print(_c("31", f"Cannot reach daemon on port {port} ({e}). Is it running? `alarm start`"))
         sys.exit(2)
@@ -279,7 +286,6 @@ def cmd_restart(args):
 
 
 def cmd_install(args) -> int:
-    import shutil
     from pathlib import Path
     src = PROJECT_ROOT / "systemd" / SERVICE
     if not src.exists():
@@ -287,7 +293,13 @@ def cmd_install(args) -> int:
         return 1
     dst_dir = Path.home() / ".config" / "systemd" / "user"
     dst_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dst_dir / SERVICE)
+    # The shipped unit is a template written for the author's checkout; point
+    # it at this install's project root and interpreter.
+    template_root = "/home/klein/codeWS/Python/Alarm"
+    unit = src.read_text()
+    unit = unit.replace(f"{template_root}/.venv/bin/python", sys.executable)
+    unit = unit.replace(template_root, str(PROJECT_ROOT))
+    (dst_dir / SERVICE).write_text(unit)
     _systemctl("daemon-reload")
     print(f"Installed {SERVICE}. Enable with: systemctl --user enable --now {SERVICE}")
     return 0

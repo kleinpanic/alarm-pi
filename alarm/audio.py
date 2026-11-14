@@ -12,7 +12,6 @@ import logging
 from pathlib import Path
 from typing import Optional, List
 import threading
-import time
 
 from .models import Alarm, Settings
 

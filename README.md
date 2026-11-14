@@ -89,7 +89,7 @@ flowchart LR
     Web -->|control| Audio
   end
 
-  Config[("config/<br/>alarms.json · settings.json · state.json")]
+  Config[("config/<br/>operational.json")]
   Loop <-->|hot-reload / persist| Config
 ```
 
@@ -101,13 +101,16 @@ cd alarm-pi
 python3 -m venv .venv
 .venv/bin/pip install -e .          # installs Flask + the `alarm` command
 
-# seed local config from the examples (these files are gitignored)
+# optional: seed config from the examples (imported once on first run)
 cp config/settings.example.json config/settings.json
 cp config/alarms.example.json   config/alarms.json
 
 .venv/bin/alarm install             # install the systemd user unit
 systemctl --user enable --now alarm-daemon.service
 ```
+
+`alarm install` writes the unit with this checkout's path and the venv's
+Python, so run it from the venv you installed into.
 
 The daemon serves the web UI on `http://<pi-lan-ip>:8765`. If you skip the `cp`
 step it creates default config on first run.
@@ -123,9 +126,13 @@ schedule). Versioned templates are provided:
 - `config/alarms.example.json` — alarm definitions
 - `config/settings.example.json` — audio / web / snooze settings
 
-Edits to `alarms.json` and `settings.json` are hot-reloaded by the running
-daemon, so CLI and web changes apply live. `default_sound` may be absolute or
-relative to the project root.
+On first run, any `alarms.json`, `settings.json` and `state.json` present are
+validated and imported into a single `config/operational.json` (originals are
+backed up under `config/backups/`). After that, `operational.json` is the only
+source of truth: the legacy files are **not** read again, so change alarms and
+settings through the CLI or web UI. The running daemon hot-reloads
+`operational.json`, so those changes apply live. `default_sound` and per-alarm
+sounds may be absolute or relative to the project root.
 
 ## CLI reference
 
@@ -170,7 +177,13 @@ Pages: `/` dashboard · `/alarms` · `/alarms/new` · `/alarms/<id>/edit` · `/s
 
 **PIN:** blank by default (open on a trusted LAN). Set a PIN in Settings to gate
 other hosts; requests from `127.0.0.1` always bypass it, so the popup and CLI
-never need it.
+never need it. Changing the PIN signs out existing browser sessions, and five
+wrong PINs from one address lock that address out for a minute.
+
+**Cross-origin writes:** state-changing requests whose `Origin`/`Referer` names
+a different host than the one serving the UI are rejected with 403, so other
+websites cannot drive the API from your browser. If you put AlarmPi behind a
+reverse proxy, make it forward the original `Host` header.
 
 ## How it works
 
@@ -187,12 +200,17 @@ never need it.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e ".[dev]"   # flask + pytest + pre-commit
+.venv/bin/pip install -e ".[dev]"   # flask + pytest + ruff + pre-commit
+.venv/bin/ruff check .              # lint
 .venv/bin/python -m pytest          # run the test suite
 pre-commit install                  # local gitleaks + pytest hooks
+
+# only when editing templates/CSS: rebuild the packaged Tailwind stylesheet
+npm ci && npm run build:web
 ```
 
-CI runs the same `pytest` suite across Python 3.10–3.12 plus a
+CI runs `ruff` and the `pytest` suite across Python 3.10–3.12, builds the web
+assets with `npm ci && npm run build:web`, and runs a
 [gitleaks](https://github.com/gitleaks/gitleaks) secret scan over full history.
 The pre-commit hooks mirror CI, so local commits and CI catch the same issues.
 

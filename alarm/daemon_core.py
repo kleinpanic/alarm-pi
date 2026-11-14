@@ -510,7 +510,8 @@ class AlarmDaemon:
             return
         cmd = [sys.executable, "-m", "alarm.popup",
                "--port", str(self.settings.web_port),
-               "--label", alarm.label, "--time", alarm.time,
+               # "--opt=value" so a label starting with "-" isn't parsed as a flag.
+               f"--label={alarm.label}", f"--time={alarm.time}",
                "--snooze-minutes", str(self.settings.default_snooze_minutes)]
         if alarm.snoozable:
             cmd.append("--snoozable")

@@ -7,11 +7,15 @@ A PIN, when set, gates non-local browsers; 127.0.0.1 always bypasses it so the
 daemon-spawned popup and the local CLI never need it.
 """
 
+import hashlib
+import hmac
 import logging
 import shutil
 import secrets
+import time
 from datetime import datetime, timedelta
 from typing import Any, Mapping, Optional
+from urllib.parse import urlsplit
 
 from flask import (
     Flask, render_template, request, redirect, url_for, jsonify, session, abort,
@@ -25,6 +29,9 @@ from ..validation import FieldIssue, ValidationError, validate_alarm_payload, va
 
 logger = logging.getLogger(__name__)
 LOCAL_ADDRS = {"127.0.0.1", "::1", "localhost"}
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+LOGIN_MAX_FAILURES = 5
+LOGIN_LOCKOUT_SECONDS = 60
 
 
 ALARM_ALIASES = {
@@ -97,16 +104,34 @@ def create_app(daemon) -> Flask:
 
     # ---- PIN gate ----
 
+    login_failures: dict[str, tuple[int, float]] = {}
+
+    def _pin_token(pin: str) -> str:
+        # Binds a session to the PIN it unlocked, so changing the PIN revokes it.
+        return hmac.new(app.secret_key.encode(), pin.encode(), hashlib.sha256).hexdigest()
+
     def _pin_required() -> bool:
         pin = daemon.settings.web_pin
         if not pin:
             return False
         if request.remote_addr in LOCAL_ADDRS:
             return False
-        return not session.get("authed")
+        return not hmac.compare_digest(session.get("pin_token", ""), _pin_token(pin))
+
+    def _cross_origin() -> bool:
+        source = request.headers.get("Origin") or request.headers.get("Referer")
+        if not source:
+            return False  # non-browser clients (CLI, popup) send neither
+        return urlsplit(source).netloc != request.host
 
     @app.before_request
     def _gate():
+        # Browsers attach Origin to cross-site writes; refuse them so a page on
+        # another site cannot drive the open-by-default API or the forms (CSRF).
+        if request.method not in SAFE_METHODS and _cross_origin():
+            if request.path.startswith("/api/"):
+                return jsonify(error="cross-origin request refused"), 403
+            abort(403)
         if request.endpoint in ("login", "static"):
             return None
         if _pin_required():
@@ -335,11 +360,26 @@ def create_app(daemon) -> Flask:
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
-            if request.form.get("pin") == daemon.settings.web_pin:
-                session["authed"] = True
-                return redirect(request.args.get("next") or url_for("dashboard"))
+            pin = daemon.settings.web_pin or ""
+            addr = request.remote_addr or ""
+            failures, last = login_failures.get(addr, (0, 0.0))
+            now = time.monotonic()
+            if failures >= LOGIN_MAX_FAILURES and now - last < LOGIN_LOCKOUT_SECONDS:
+                return render_template("login.html", error="Too many attempts; wait a minute"), 429
+            submitted = request.form.get("pin", "")
+            if pin and hmac.compare_digest(submitted.encode(), pin.encode()):
+                login_failures.pop(addr, None)
+                session["pin_token"] = _pin_token(pin)
+                return redirect(_safe_next(request.args.get("next")))
+            login_failures[addr] = (0 if now - last >= LOGIN_LOCKOUT_SECONDS else failures) + 1, now
             return render_template("login.html", error="Wrong PIN"), 401
         return render_template("login.html", error=None)
+
+    def _safe_next(target: Optional[str]) -> str:
+        # Only same-site paths; "//host" and "/\\host" are scheme-relative URLs.
+        if not target or not target.startswith("/") or target.startswith(("//", "/\\")):
+            return url_for("dashboard")
+        return target
 
     # ---- JSON API ----
 
@@ -406,7 +446,12 @@ def create_app(daemon) -> Flask:
         alarm = next((item for item in daemon.repository.snapshot().alarms if item.id == aid), None)
         if not alarm:
             return jsonify(error="not found"), 404
-        body = request.get_json(force=True, silent=True) or {}
+        body = request.get_json(silent=True)
+        if body is None:
+            body = {}
+        if not isinstance(body, Mapping):
+            error = ValidationError((FieldIssue("$", "type", "must be an object"),))
+            return jsonify(error="validation_failed", issues=_issue_data(error)), 400
         date = body.get("date") or datetime.now().strftime("%Y-%m-%d")
         if date == "tomorrow":
             date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
